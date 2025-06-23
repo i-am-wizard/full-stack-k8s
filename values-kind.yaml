@@ -1,0 +1,29 @@
+backend:
+  replicas: 1
+  image:
+    repository: ghcr.io/i-am-wizard/word-manager-backend
+    tag: 1.0.0-6
+  env:
+    datasourceUrl: jdbc:postgresql://postgres:5432/hello_db
+    datasourceUser: user
+    datasourcePassword: password
+
+postgres:
+  replicas: 1
+  image: 
+    repository: postgres
+    tag: latest
+  pullPolicy: Never
+  env:
+    db: hello_db
+    user: user
+    password: password
+  storageClassName: local-path
+  storageSize: 1Gi  
+
+frontend:
+  replicas: 1
+  image: 
+    repository: ghcr.io/i-am-wizard/word-manager-frontend
+    tag: 1.0.0-4
+  serviceType: NodePort
