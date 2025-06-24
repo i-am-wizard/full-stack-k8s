@@ -24,7 +24,7 @@ kind load docker-image postgres:latest
 ```bash
 helm install three-tier-app . \
   --namespace dev \
-  --values values-dev.yaml
+  --values values-kind.yaml
 ```
 
 ### 4. Verify the Deployment
@@ -42,6 +42,16 @@ kubectl port-forward service/frontend 8080:80 -n dev
 Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
+
+## 🐔 Deployment on K3S
+
+### 1. Deploy with Helm
+
+```bash
+helm install three-tier-app . \
+  --namespace dev \
+  --values values-k3s.yaml
+```
 
 ## ☁️ Deployment on AWS EKS
 
