@@ -26,4 +26,4 @@ frontend:
   image: 
     repository: ghcr.io/i-am-wizard/word-manager-frontend
     tag: 1.0.0-4
-  serviceType: NodePort
+  serviceType: ClusterIP

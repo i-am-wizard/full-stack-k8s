@@ -7,6 +7,13 @@ backend:
     datasourceUrl: jdbc:postgresql://postgres:5432/hello_db
     datasourceUser: user
     datasourcePassword: password
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi  
 
 postgres:
   replicas: 1
@@ -19,7 +26,14 @@ postgres:
     user: user
     password: password
   storageClassName: local-path
-  storageSize: 1Gi  
+  storageSize: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 150m
+      memory: 256Mi
 
 frontend:
   replicas: 1
@@ -27,3 +41,10 @@ frontend:
     repository: ghcr.io/i-am-wizard/word-manager-frontend
     tag: 1.0.0-4
   serviceType: NodePort
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi

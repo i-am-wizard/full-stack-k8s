@@ -30,6 +30,10 @@ spec:
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage
+          {{- with .Values.postgres.resources }}
+          resources:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}    
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
