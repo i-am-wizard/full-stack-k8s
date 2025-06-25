@@ -16,15 +16,17 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: busybox
+          image: postgres:latest
+          imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c
             - |
-              until nc -z postgres 5432; do
-                echo "Waiting for Postgres..."
+              until pg_isready -h postgres -p 5432; do
+                echo "Waiting for Postgres to become ready..."
                 sleep 2
               done
+
       containers:
         - name: backend
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"

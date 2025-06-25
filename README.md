@@ -9,13 +9,15 @@ kind create cluster --config kind-cluster.yaml
 kubectl create namespace dev
 ```
 
-### 2. Load Docker Images into kind
-
-Make sure the images are pulled first:
+### 2. Pull and load Docker Images into kind
 
 ```bash
-kind load docker-image ghcr.io/i-am-wizard/word-manager-frontend:1.0.0-4
-kind load docker-image ghcr.io/i-am-wizard/word-manager-backend:1.0.0-6
+docker pull ghcr.io/i-am-wizard/word-manager-backend:1.0.0-15
+docker pull ghcr.io/i-am-wizard/word-manager-frontend:1.0.0-5
+docker pull postgres:latest
+
+kind load docker-image ghcr.io/i-am-wizard/word-manager-frontend:1.0.0-15
+kind load docker-image ghcr.io/i-am-wizard/word-manager-backend:1.0.0-5
 kind load docker-image postgres:latest
 ```
 
