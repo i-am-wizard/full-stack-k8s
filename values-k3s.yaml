@@ -9,11 +9,11 @@ backend:
     datasourcePassword: password
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 100m
+      memory: 128Mi
     limits:
-      cpu: 200m
-      memory: 128Mi  
+      cpu: 300m
+      memory: 384Mi  
 
 postgres:
   replicas: 1
@@ -29,11 +29,11 @@ postgres:
   storageSize: 1Gi
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 150m
+      cpu: 100m
       memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
 
 frontend:
   replicas: 1
@@ -43,8 +43,8 @@ frontend:
   serviceType: NodePort
   resources:
     requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 50m
+      cpu: 25m
       memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
