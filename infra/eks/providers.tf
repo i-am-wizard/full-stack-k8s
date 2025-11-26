@@ -1,3 +1,5 @@
+data "aws_region" "current" {}
+
 terraform {
   required_version = ">= 1.13.0"
   
@@ -10,5 +12,5 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = data.aws_region.current.name
 }

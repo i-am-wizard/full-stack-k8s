@@ -20,13 +20,9 @@ spec:
           imagePullPolicy: {{ .Values.postgres.pullPolicy }}
           ports:
             - containerPort: 5432
-          env:
-            - name: POSTGRES_DB
-              value: {{ .Values.postgres.env.db }}
-            - name: POSTGRES_USER
-              value: {{ .Values.postgres.env.user }}
-            - name: POSTGRES_PASSWORD
-              value: {{ .Values.postgres.env.password }}
+          envFrom:
+            - secretRef:
+                name: postgres-auth
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage

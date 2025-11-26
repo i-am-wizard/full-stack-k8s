@@ -35,10 +35,9 @@ spec:
           env:
             - name: SPRING_DATASOURCE_URL
               value: {{ .Values.backend.env.datasourceUrl }}
-            - name: SPRING_DATASOURCE_USERNAME
-              value: {{ .Values.backend.env.datasourceUser }}
-            - name: SPRING_DATASOURCE_PASSWORD
-              value: {{ .Values.backend.env.datasourcePassword }}
+          envFrom:
+            - secretRef:
+                name: postgres-auth
             - name: JAVA_TOOL_OPTIONS
               value: "-Xmx128m"  
           {{- with .Values.backend.resources }}

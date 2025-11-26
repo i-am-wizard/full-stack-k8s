@@ -1,0 +1,41 @@
+imagePullSecrets: []
+
+backend:
+  replicas: 1
+  image:
+    repository: <aws_account_id>.dkr.ecr.eu-west-1.amazonaws.com/word-manager-backend
+    tag: 1.0.0
+  env:
+    datasourceUrl: jdbc:postgresql://postgres:5432/hello_db
+    secretName: postgres-auth
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+frontend:
+  replicas: 1
+  image:
+    repository: <aws_account_id>.dkr.ecr.eu-west-1.amazonaws.com/word-manager-frontend
+    tag: 1.0.0
+  serviceType: LoadBalancer
+  host: app.example.com
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+postgres:
+  replicas: 1
+  image:
+    repository: postgres
+    tag: "16"
+  pullPolicy: IfNotPresent
+  secretName: postgres-auth
+  storageSize: 1Gi
