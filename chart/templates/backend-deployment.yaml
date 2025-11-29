@@ -34,12 +34,12 @@ spec:
             - containerPort: 8080
           env:
             - name: SPRING_DATASOURCE_URL
-              value: {{ .Values.backend.env.datasourceUrl }}
+              value: "{{ .Values.backend.env.datasourceUrl }}"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xmx128m"
           envFrom:
             - secretRef:
                 name: postgres-auth
-            - name: JAVA_TOOL_OPTIONS
-              value: "-Xmx128m"  
           {{- with .Values.backend.resources }}
           resources:
           {{- toYaml . | nindent 12 }}

@@ -70,7 +70,7 @@ terraform plan
 terraform apply
 ```
 
-### 1. Provision cluster via Terraform
+### 2. Provision cluster via Terraform
 
 ```bash
 cd infra/eks
@@ -80,13 +80,13 @@ terraform apply
 aws eks update-kubeconfig --name three-tier-eks --region eu-west-2
 ```
 
-### 2. Ensure dev namespace exists
+### 3. Create dev namespace
 
 ```bash
 kubectl create namespace dev
 ```
 
-### 3. Create DB Credentials as k8s secret
+### 3. Create DB Credentials
 
 ```bash
 kubectl create secret generic postgres-auth \
@@ -98,23 +98,37 @@ kubectl create secret generic postgres-auth \
   --from-literal=SPRING_DATASOURCE_PASSWORD=change-password
 ```
 
-### 4. Deploy with Helm
+### 4. Publish images
 
-***Before running helm ensure <aws_account_id> is set in values-eks.yaml***
+Rerun latest green builds of:
+- https://github.com/i-am-wizard/word-manager-be/actions
+- https://github.com/i-am-wizard/word-manager-fe/actions
+
+Ensure builds are green
+
+### 5. Deploy with Helm
+
+***Export repository urls and run helm chart***
 
 ```bash
-helm upgrade --install three-tier-app ./chart \
+export REPO_URL_BE=$(aws ecr describe-repositories  --repository-names word-manager-backend --region eu-west-2 --query "repositories[].repositoryUri" --output=text)
+
+export REPO_URL_FE=$(aws ecr describe-repositories  --repository-names word-manager-frontend --region eu-west-2 --query "repositories[].repositoryUri" --output=text)
+
+helm install three-tier-app ./chart \
   --namespace dev \
-  --values values-eks.yaml
+  --values ./chart/values-eks.yaml \
+  --set backend.image.repository=\"$REPO_URL_BE\" \
+  --set frontend.image.repository=\"$REPO_URL_FE\"
 ```
 
-### 4. Verify the Deployment
+### 6. Verify the Deployment
 
 ```bash
 kubectl get all -n dev
 ```
 
-### 5. Get ELB hostname to access the front end
+### 7. Get ELB hostname to access the front end
 
 ```bash
 kubectl get svc -n dev

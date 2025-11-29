@@ -8,4 +8,4 @@ spec:
   accessModes: [ReadWriteOnce]
   resources:
     requests:
-      storage: {{ .Values.postgres.storageSize }}
+      storage: "{{ .Values.postgres.storageSize }}"

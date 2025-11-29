@@ -19,7 +19,10 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"]
+      values   = [
+        "repo:${var.github_repo_fe}:ref:refs/heads/${var.github_branch}",
+        "repo:${var.github_repo_be}:ref:refs/heads/${var.github_branch}"
+        ]
     }
   }
 }
@@ -53,7 +56,8 @@ data "aws_iam_policy_document" "github_actions_ecr_permissions" {
       "ecr:BatchGetImage"
     ]
     resources = [
-      aws_ecr_repository.app_repo.arn
+      aws_ecr_repository.app_repo_fe.arn,
+      aws_ecr_repository.app_repo_be.arn
     ]
   }
 }
