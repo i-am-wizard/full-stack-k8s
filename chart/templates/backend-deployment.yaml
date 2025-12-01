@@ -16,16 +16,8 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: postgres:latest
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              until pg_isready -h postgres -p 5432; do
-                echo "Waiting for Postgres to become ready..."
-                sleep 2
-              done
+          image: busybox:1.28
+          command: ['sh', '-c', "until nc -z -v -w30 postgres-svc 5432; do echo waiting for database; sleep 2; done"]
 
       containers:
         - name: backend

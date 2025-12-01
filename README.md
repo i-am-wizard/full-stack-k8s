@@ -118,8 +118,8 @@ export REPO_URL_FE=$(aws ecr describe-repositories  --repository-names word-mana
 helm install three-tier-app ./chart \
   --namespace dev \
   --values ./chart/values-eks.yaml \
-  --set backend.image.repository=\"$REPO_URL_BE\" \
-  --set frontend.image.repository=\"$REPO_URL_FE\"
+  --set backend.image.repository="$REPO_URL_BE" \
+  --set frontend.image.repository="$REPO_URL_FE"
 ```
 
 ### 6. Verify the Deployment

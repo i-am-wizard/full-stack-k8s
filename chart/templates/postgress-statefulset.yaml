@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
   labels:
     app: postgres
 spec:
+  serviceName: "postgres-svc"
   replicas: {{ .Values.postgres.replicas }}
   selector:
     matchLabels:
@@ -25,13 +26,21 @@ spec:
                 name: postgres-auth
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
-              name: postgres-storage
+              name: data
+              subPath: postgres  
           {{- with .Values.postgres.resources }}
           resources:
           {{- toYaml . | nindent 12 }}
-          {{- end }}    
-      volumes:
-        - name: postgres-storage
-          persistentVolumeClaim:
-            claimName: postgres-pvc
-            
+          {{- end }}
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.postgres.storageClass }}
+      storageClassName: {{ .Values.postgres.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.postgres.storageSize }}

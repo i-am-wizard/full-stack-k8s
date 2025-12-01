@@ -4,7 +4,7 @@ backend:
     repository: ""
     tag: 1.0.0-19
   env:
-    datasourceUrl: jdbc:postgresql://postgres:5432/hello_db
+    datasourceUrl: jdbc:postgresql://postgres-svc:5432/hello_db
     secretName: postgres-auth
   resources:
     requests:
@@ -37,3 +37,4 @@ postgres:
   pullPolicy: IfNotPresent
   secretName: postgres-auth
   storageSize: 1Gi
+  storageClass: ""
