@@ -108,6 +108,11 @@ Ensure builds are green
 
 ### 5. Deploy with Helm
 
+***Install Nginx Ingress Controller (Required for Ingress)***
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/aws/deploy.yaml
+```
+
 ***Export repository urls and run helm chart***
 
 ```bash

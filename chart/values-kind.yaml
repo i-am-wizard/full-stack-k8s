@@ -8,6 +8,8 @@ backend:
     datasourceUser: user
     datasourcePassword: password
 
+ingress:
+  enabled: false
 postgres:
   replicas: 1
   image: 
