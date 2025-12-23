@@ -43,20 +43,6 @@ kubectl port-forward service/frontend 8080:80 -n dev
 
 Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
----
-
-## 🐔 Deployment on K3S
-
-***This assumes you have k3s setup ready***
-
-### 1. Deploy with Helm
-
-```bash
-helm install three-tier-app . \
-  --namespace dev \
-  --values values-k3s.yaml
-```
-
 ## ☁️ Deployment on AWS EKS
 
 ***This assumes you have access to AWS, have terraform and kubectl installed, Github actions and settings configured***
@@ -116,6 +102,8 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 ***Export repository urls and run helm chart***
 
 ```bash
+cd ../..
+
 export REPO_URL_BE=$(aws ecr describe-repositories  --repository-names word-manager-backend --region eu-west-2 --query "repositories[].repositoryUri" --output=text)
 
 export REPO_URL_FE=$(aws ecr describe-repositories  --repository-names word-manager-frontend --region eu-west-2 --query "repositories[].repositoryUri" --output=text)
@@ -136,6 +124,19 @@ kubectl get all -n dev
 ### 7. Get ELB hostname to access the front end
 
 ```bash
-kubectl get svc -n dev
+kubectl get svc -n ingress-nginx
 ```
-copy `EXTERNAL-IP` and paste into the browser
+Find the `EXTERNAL-IP` of the `ingress-nginx-controller` service and paste it into the browser.
+
+### 8. Teardown
+
+To avoid "DependencyViolation" errors when destroying Terraform you **must** delete the Load Balancer first.
+
+```bash
+helm uninstall three-tier-app --namespace dev
+
+kubectl delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/aws/deploy.yaml
+
+cd infra/eks
+terraform destroy
+```
