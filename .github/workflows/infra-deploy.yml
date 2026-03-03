@@ -1,0 +1,156 @@
+name: "Infrastructure: Plan & Deploy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Choose action to run"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  TF_VERSION: "1.13.5"
+  CLUSTER_NAME: three-tier-eks
+  HELM_RELEASE: three-tier-app
+  NAMESPACE: dev
+
+jobs:
+  terraform-plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'plan'
+    defaults:
+      run:
+        working-directory: infra/eks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          role-session-name: github-actions-tf-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        continue-on-error: true
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  terraform-apply-and-deploy:
+    name: "Apply & Deploy"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'apply'
+    defaults:
+      run:
+        working-directory: infra/eks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          role-session-name: github-actions-tf-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create DB credentials secret
+        run: |
+          kubectl create secret generic postgres-auth \
+            --namespace ${{ env.NAMESPACE }} \
+            --from-literal=POSTGRES_DB=${{ secrets.DB_NAME }} \
+            --from-literal=POSTGRES_USER=${{ secrets.DB_USER }} \
+            --from-literal=POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --from-literal=SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USER }} \
+            --from-literal=SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Install NGINX Ingress Controller
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/aws/deploy.yaml
+          echo "Waiting for ingress controller to be ready..."
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=120s || true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Get ECR repository URLs
+        id: ecr
+        working-directory: .
+        run: |
+          REPO_URL_BE=$(aws ecr describe-repositories \
+            --repository-names word-manager-backend \
+            --region ${{ env.AWS_REGION }} \
+            --query "repositories[0].repositoryUri" \
+            --output text)
+          REPO_URL_FE=$(aws ecr describe-repositories \
+            --repository-names word-manager-frontend \
+            --region ${{ env.AWS_REGION }} \
+            --query "repositories[0].repositoryUri" \
+            --output text)
+          echo "backend_repo=$REPO_URL_BE" >> "$GITHUB_OUTPUT"
+          echo "frontend_repo=$REPO_URL_FE" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Helm chart
+        working-directory: .
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./chart \
+            --namespace ${{ env.NAMESPACE }} \
+            --values ./chart/values-eks.yaml \
+            --set backend.image.repository="${{ steps.ecr.outputs.backend_repo }}" \
+            --set frontend.image.repository="${{ steps.ecr.outputs.frontend_repo }}" \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl get all -n ${{ env.NAMESPACE }}
+          echo "---"
+          kubectl get svc -n ingress-nginx

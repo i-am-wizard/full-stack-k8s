@@ -45,9 +45,91 @@ Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ## ☁️ Deployment on AWS EKS
 
-***This assumes you have access to AWS, have terraform and kubectl installed, Github actions and settings configured***
+Infrastructure is deployed via two GitHub Actions workflows (manual trigger):
 
-### 1. Create ECR with Github OIDC
+- **`infra-deploy.yml`** — Run `plan` to preview or `apply` to provision infra + deploy Helm chart
+- **`infra-destroy.yml`** — Manual-only teardown (type `destroy` to confirm)
+
+#### Prerequisites (one-time setup)
+
+**1. Create S3 bucket for Terraform state**
+
+```bash
+aws s3api create-bucket \
+  --bucket full-stack-k8s-tfstate \
+  --region eu-west-2 \
+  --create-bucket-configuration LocationConstraint=eu-west-2
+
+aws s3api put-bucket-versioning \
+  --bucket full-stack-k8s-tfstate \
+  --versioning-configuration Status=Enabled
+
+aws s3api put-public-access-block \
+  --bucket full-stack-k8s-tfstate \
+  --public-access-block-configuration \
+    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+**2. Create IAM role for GitHub Actions infra deploys**
+
+The OIDC provider should already exist. Apply the EKS OIDC stack to create the IAM role
+trusted by this repo for EKS + VPC + Helm deploy:
+
+```bash
+cd infra/eks-oidc
+terraform init
+terraform plan
+terraform apply
+```
+
+Note the `infra_role_arn` output — you'll need it for the next step.
+
+**3. Migrate Terraform state to S3**
+
+If you have existing local state in `infra/eks/`, migrate it:
+
+```bash
+cd infra/eks
+terraform init -migrate-state
+```
+
+**4. Configure GitHub repository secrets**
+
+In repo settings → Secrets and variables → Actions, add:
+
+| Secret              | Description                                    |
+|---------------------|------------------------------------------------|
+| `AWS_INFRA_ROLE_ARN`| ARN of `github-actions-infra-deploy` IAM role |
+| `DB_NAME`           | Postgres database name (e.g. `hello_db`)       |
+| `DB_USER`           | Postgres username                              |
+| `DB_PASSWORD`       | Postgres password                              |
+
+**5. Publish container images**
+
+Ensure the latest images are pushed by triggering green builds in:
+- https://github.com/i-am-wizard/word-manager-be/actions
+- https://github.com/i-am-wizard/word-manager-fe/actions
+
+#### Accessing the application
+
+After a successful deploy, get the ELB hostname:
+
+```bash
+kubectl get svc -n ingress-nginx
+```
+
+Find the `EXTERNAL-IP` of the `ingress-nginx-controller` service and paste it into the browser.
+
+---
+
+### Manual deployment
+
+<details>
+<summary>Click to expand manual steps</summary>
+
+***This assumes you have access to AWS, have terraform and kubectl installed***
+
+#### 1. Create ECR with Github OIDC
 
 ```bash
 cd infra/ecr-oidc
@@ -56,7 +138,7 @@ terraform plan
 terraform apply
 ```
 
-### 2. Provision cluster via Terraform
+#### 2. Provision cluster via Terraform
 
 ```bash
 cd infra/eks
@@ -66,13 +148,13 @@ terraform apply
 aws eks update-kubeconfig --name three-tier-eks --region eu-west-2
 ```
 
-### 3. Create dev namespace
+#### 3. Create dev namespace
 
 ```bash
 kubectl create namespace dev
 ```
 
-### 3. Create DB Credentials
+#### 4. Create DB Credentials
 
 ```bash
 kubectl create secret generic postgres-auth \
@@ -84,7 +166,7 @@ kubectl create secret generic postgres-auth \
   --from-literal=SPRING_DATASOURCE_PASSWORD=change-password
 ```
 
-### 4. Publish images
+#### 5. Publish images
 
 Rerun latest green builds of:
 - https://github.com/i-am-wizard/word-manager-be/actions
@@ -92,7 +174,7 @@ Rerun latest green builds of:
 
 Ensure builds are green
 
-### 5. Deploy with Helm
+#### 6. Deploy with Helm
 
 ***Install Nginx Ingress Controller (Required for Ingress)***
 ```bash
@@ -115,20 +197,20 @@ helm install three-tier-app ./chart \
   --set frontend.image.repository="$REPO_URL_FE"
 ```
 
-### 6. Verify the Deployment
+#### 7. Verify the Deployment
 
 ```bash
 kubectl get all -n dev
 ```
 
-### 7. Get ELB hostname to access the front end
+#### 8. Get ELB hostname to access the front end
 
 ```bash
 kubectl get svc -n ingress-nginx
 ```
 Find the `EXTERNAL-IP` of the `ingress-nginx-controller` service and paste it into the browser.
 
-### 8. Teardown
+#### 9. Teardown
 
 To avoid "DependencyViolation" errors when destroying Terraform you **must** delete the Load Balancer first.
 
@@ -140,3 +222,5 @@ kubectl delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/con
 cd infra/eks
 terraform destroy
 ```
+
+</details>

@@ -9,5 +9,16 @@
 crash.log
 crash.*.log
 
-#Other files
+# Terraform lock files (state locking via S3)
+.terraform.lock.info
+
+# Override files
+*.tfvars
+!*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Other files
 .DS_Store

@@ -1,0 +1,91 @@
+name: "Infrastructure: Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'destroy' to confirm teardown"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  TF_VERSION: "1.13.5"
+  CLUSTER_NAME: three-tier-eks
+  HELM_RELEASE: three-tier-app
+  NAMESPACE: dev
+
+jobs:
+  destroy:
+    name: "Teardown Infrastructure"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'destroy'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          role-session-name: github-actions-tf-destroy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }} || true
+
+      - name: Uninstall Helm release
+        run: |
+          helm uninstall ${{ env.HELM_RELEASE }} --namespace ${{ env.NAMESPACE }} || true
+
+      - name: Delete NGINX Ingress Controller
+        run: |
+          kubectl delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/aws/deploy.yaml || true
+
+      - name: Wait for ELB and ENI cleanup
+        run: |
+          echo "Waiting for load balancers in ingress-nginx to be deleted..."
+          for i in $(seq 1 30); do
+            LB_COUNT=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'k8s') || contains(LoadBalancerName, 'ingress')]" --output json | jq 'length')
+            if [ "$LB_COUNT" = "0" ]; then
+              echo "All related load balancers deleted."
+              break
+            fi
+            echo "  $LB_COUNT load balancer(s) still exist, retrying in 10s... ($i/30)"
+            sleep 10
+          done
+
+          echo "Waiting for orphaned ENIs to be released..."
+          VPC_ID=$(cd infra/eks && terraform output -raw vpc_id 2>/dev/null || echo "")
+          if [ -n "$VPC_ID" ]; then
+            for i in $(seq 1 30); do
+              ENI_COUNT=$(aws ec2 describe-network-interfaces \
+                --filters "Name=vpc-id,Values=$VPC_ID" "Name=status,Values=in-use" "Name=description,Values=*ELB*" \
+                --query "NetworkInterfaces" --output json | jq 'length')
+              if [ "$ENI_COUNT" = "0" ]; then
+                echo "All ELB ENIs released."
+                break
+              fi
+              echo "  $ENI_COUNT ENI(s) still in use, retrying in 10s... ($i/30)"
+              sleep 10
+            done
+          fi
+
+      - name: Terraform Destroy
+        working-directory: infra/eks
+        run: |
+          terraform init
+          terraform destroy -auto-approve
