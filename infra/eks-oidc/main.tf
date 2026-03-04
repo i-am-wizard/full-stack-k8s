@@ -54,43 +54,9 @@ data "aws_iam_policy_document" "github_actions_infra_permissions" {
   }
 
   statement {
-    sid    = "IAM"
-    effect = "Allow"
-    actions = [
-      "iam:CreateRole",
-      "iam:DeleteRole",
-      "iam:GetRole",
-      "iam:PassRole",
-      "iam:TagRole",
-      "iam:UntagRole",
-      "iam:UpdateRole",
-      "iam:UpdateAssumeRolePolicy",
-      "iam:ListRolePolicies",
-      "iam:ListAttachedRolePolicies",
-      "iam:ListInstanceProfilesForRole",
-      "iam:AttachRolePolicy",
-      "iam:DetachRolePolicy",
-      "iam:PutRolePolicy",
-      "iam:GetRolePolicy",
-      "iam:DeleteRolePolicy",
-      "iam:CreateOpenIDConnectProvider",
-      "iam:DeleteOpenIDConnectProvider",
-      "iam:GetOpenIDConnectProvider",
-      "iam:TagOpenIDConnectProvider",
-      "iam:CreateInstanceProfile",
-      "iam:DeleteInstanceProfile",
-      "iam:GetInstanceProfile",
-      "iam:AddRoleToInstanceProfile",
-      "iam:RemoveRoleFromInstanceProfile",
-      "iam:CreateServiceLinkedRole",
-      "iam:ListPolicies",
-      "iam:GetPolicy",
-      "iam:GetPolicyVersion",
-      "iam:CreatePolicy",
-      "iam:DeletePolicy",
-      "iam:CreatePolicyVersion",
-      "iam:DeletePolicyVersion"
-    ]
+    sid       = "IAM"
+    effect    = "Allow"
+    actions   = ["iam:*"]
     resources = ["*"]
   }
 
