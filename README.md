@@ -224,5 +224,3 @@ terraform destroy
 ```
 
 </details>
-
-test
