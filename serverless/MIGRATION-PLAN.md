@@ -15,35 +15,6 @@ Migrate the full-stack-k8s project from EKS (Java/Spring Boot + PostgreSQL + Ngi
 - **Infrastructure** → Terraform modules (no Helm, no K8s)
 - **CI/CD** → Lives in the separate frontend/backend application repositories
 
-## Target Architecture
-
-```
-                   ┌─────────────┐
-    User ─────────►│ CloudFront  │
-                   │  (HTTPS)    │
-                   └──────┬──────┘
-                          │
-                ┌─────────┴─────────┐
-                │                   │
-         /static/*            /api/*
-                │                   │
-        ┌───────▼───────┐  ┌───────▼───────┐
-        │  S3 Bucket    │  │ API Gateway   │
-        │  (OAC only)   │  │ (HTTP API)    │
-        └───────────────┘  └───────┬───────┘
-                                   │
-                           ┌───────▼───────┐
-                           │  Lambda       │
-                           │  (Rust ARM64  │
-                           │   provided)   │
-                           └───────┬───────┘
-                                   │
-                           ┌───────▼───────┐
-                           │  DynamoDB     │
-                           │  (on-demand)  │
-                           └───────────────┘
-```
-
 ## Phases
 
 ### Phase 1 - Frontend: S3 + CloudFront ✅
@@ -109,7 +80,14 @@ cd ../frontend
 terraform init && terraform apply -var="frontend_bucket_name=your-globally-unique-name"
 ```
 
-Destroy order: `frontend → backend → iam → database`
+Destroy order: `frontend, backend, iam, database`
+
+```bash
+cd frontend  && terraform destroy
+cd ../backend && terraform destroy
+cd ../iam     && terraform destroy
+cd ../database && terraform destroy
+```
 
 > **Note:** Do not use both options against the same AWS account - they create the same resources and will conflict.
 
