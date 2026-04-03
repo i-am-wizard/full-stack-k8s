@@ -21,6 +21,10 @@ resource "aws_lambda_function" "backend" {
     )
   }
 
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+
   tags = var.tags
 }
 
@@ -40,6 +44,10 @@ resource "aws_lambda_alias" "live" {
   name             = "live"
   function_name    = aws_lambda_function.backend.function_name
   function_version = aws_lambda_function.backend.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {

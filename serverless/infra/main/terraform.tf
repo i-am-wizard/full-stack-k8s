@@ -12,11 +12,5 @@ terraform {
     }
   }
 
-  backend "s3" {
-    # Provide values via -backend-config at init time:
-    #   terraform init \
-    #     -backend-config="bucket=my-tf-state" \
-    #     -backend-config="key=serverless/terraform.tfstate" \
-    #     -backend-config="region=eu-west-2"
-  }
+  backend "s3" {}
 }
