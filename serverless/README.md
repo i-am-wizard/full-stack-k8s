@@ -8,7 +8,7 @@ Deployment guide for the serverless AWS stack: **S3 + CloudFront** (frontend), *
 
 There are two ways to deploy the infrastructure:
 
-- **[Manual (Terraform CLI)](#manual-deployment-terraform-cli)** — for the one-time bootstrap and local iteration.
+- **[Manual (Terraform CLI)](#manual-deployment-terraform-cli)** — run the Terraform roots directly.
 - **[GitHub Actions](#github-actions-deployment)** — a plan/apply workflow for repeatable deploys.
 
 Shared configuration:
@@ -24,29 +24,48 @@ Shared configuration:
 
 ## Prerequisites (one-time)
 
-### 1. Terraform state bucket
-
-The `main/` root uses an S3 remote backend, so the state bucket (`word-manager-serverless-infra-ak`) must exist before `main/` is initialised. It is **created by the `infra-role` bootstrap** (versioned, encrypted, with a `prevent_destroy` guard) — see [Bootstrap roles](#bootstrap-roles-run-once-outside-ci). No manual `aws s3api` step is needed; just apply `infra-role` before deploying the stack.
-
-### 2. Frontend bucket name
-
-`frontend_bucket_name` must be **globally unique** and **start with `word-manager-`** (the deploy and provisioning roles scope S3 access to `word-manager-*`). Provide it via `TF_VAR_frontend_bucket_name` (manual) or the `FRONTEND_BUCKET_NAME` repo variable (GitHub Actions):
-
-```bash
-export TF_VAR_frontend_bucket_name="word-manager-frontend-<account-id>"
-```
+- Terraform >= 1.5 and AWS credentials with permission to create IAM roles and S3 buckets (Steps 1–2 create the IAM roles and the state bucket).
+- A **globally unique** frontend bucket name that **starts with `word-manager-`** (S3 access is scoped to `word-manager-*`), e.g. `word-manager-frontend-<account-id>`.
 
 ---
 
 ## Manual deployment (Terraform CLI)
 
-### Deploy the stack
+Run the three roots in order. Steps 1–2 use local state; Step 3 uses the S3 backend created in Step 1.
+
+### Step 1 — Provisioning role and Terraform state bucket
 
 ```bash
+cd serverless/infra/infra-role
+terraform init
+terraform plan
+terraform apply
+```
+
+Creates the `github-actions-serverless-infra` role and the `word-manager-serverless-infra-ak` state bucket. Note the outputs:
+
+- `role_arn` — set as the `AWS_SERVERLESS_INFRA_ROLE_ARN` secret in `full-stack-k8s` (for the GitHub Actions workflow).
+- `tfstate_bucket_name` — the state bucket used in Step 3.
+
+### Step 2 — Application deploy role
+
+```bash
+cd serverless/infra/deploy-role
+terraform init
+terraform plan
+terraform apply
+```
+
+Creates the `github-actions-serverless-deploy` role. Set its `role_arn` output as the `AWS_DEPLOY_ROLE_ARN` secret in `word-manager-fe` and `word-manager-rust-be`.
+
+### Step 3 — Deploy the stack
+
+```bash
+export TF_VAR_frontend_bucket_name="word-manager-frontend-<account-id>"
 cd serverless/infra/main
 
 terraform init \
-  -backend-config="bucket=$TF_STATE_BUCKET" \
+  -backend-config="bucket=word-manager-serverless-infra-ak" \
   -backend-config="key=serverless/terraform.tfstate" \
   -backend-config="region=eu-west-2" \
   -backend-config="encrypt=true" \
@@ -61,32 +80,6 @@ terraform apply
 ```bash
 cd serverless/infra/main
 terraform destroy
-
-# optional: also delete the state bucket
-aws s3 rb s3://$TF_STATE_BUCKET --force
-```
-
-### Bootstrap roles (run once, outside CI)
-
-Both are self-contained OIDC roles with **local state**, applied manually. They must be created outside GitHub Actions because they *are* the roles the pipelines assume (chicken-and-egg).
-
-**App deploy role** — assumed by the application repos to ship code (S3 sync, CloudFront invalidation, Lambda code update, SSM read):
-
-```bash
-cd serverless/infra/deploy-role
-terraform init && terraform plan && terraform apply
-# Set the role_arn output as the AWS_DEPLOY_ROLE_ARN secret in
-# word-manager-fe and word-manager-rust-be.
-```
-
-**Infra provisioning role** — assumed by the `serverless-deploy` GitHub Action to build the stack. This root also creates the **Terraform state bucket** used by `main/` (so no manual bucket creation is needed):
-
-```bash
-cd serverless/infra/infra-role
-terraform init && terraform plan && terraform apply
-# Outputs:
-#   role_arn            -> set as the AWS_SERVERLESS_INFRA_ROLE_ARN secret in full-stack-k8s
-#   tfstate_bucket_name -> the state bucket now used by serverless/infra/main
 ```
 
 ### Layer-by-layer deployment (alternative, for independent testing)
@@ -117,10 +110,9 @@ Workflow: [`.github/workflows/serverless-deploy.yml`](../.github/workflows/serve
 
 ### Prerequisites
 
-1. **Provisioning role bootstrapped** (see [Bootstrap roles](#bootstrap-roles-run-once-outside-ci)) and its `role_arn` set as the repo secret **`AWS_SERVERLESS_INFRA_ROLE_ARN`**.
-2. Repo variable **`FRONTEND_BUCKET_NAME`** set to a globally-unique `word-manager-*` bucket name.
-3. **State bucket** `word-manager-serverless-infra-ak` exists — created by the `infra-role` bootstrap above.
-4. The GitHub **OIDC provider** (`token.actions.githubusercontent.com`) exists in the account — already present from the EKS/ECR OIDC roles.
+1. Run **Step 1** (Manual deployment) once, then set the `role_arn` output as the repo secret **`AWS_SERVERLESS_INFRA_ROLE_ARN`**. This also creates the state bucket.
+2. Set the repo variable **`FRONTEND_BUCKET_NAME`** to a globally-unique `word-manager-*` bucket name.
+3. The GitHub **OIDC provider** (`token.actions.githubusercontent.com`) exists in the account — already present from the EKS/ECR OIDC roles.
 
 ### Run it
 
