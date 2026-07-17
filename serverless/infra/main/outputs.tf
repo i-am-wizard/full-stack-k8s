@@ -27,3 +27,13 @@ output "dynamodb_table_name" {
   description = "DynamoDB table name"
   value       = module.database.table_name
 }
+
+output "ssm_parameter_prefix" {
+  description = "SSM Parameter Store path prefix under which CI/CD config is published"
+  value       = "/${var.project_name}"
+}
+
+output "ssm_parameter_names" {
+  description = "Names of the SSM parameters published for the application deploy pipelines"
+  value       = keys(aws_ssm_parameter.config)
+}

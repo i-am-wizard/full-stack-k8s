@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"]
+      values   = [for repo in var.github_repos : "repo:${repo}:ref:refs/heads/${var.github_branch}"]
     }
   }
 }
@@ -104,6 +104,27 @@ data "aws_iam_policy_document" "lambda_deploy" {
 
 resource "aws_iam_role_policy" "lambda_deploy" {
   name   = "lambda-code-deploy"
-  role   = aws_iam_role.github_actions_serverless.id 
+  role   = aws_iam_role.github_actions_serverless.id
   policy = data.aws_iam_policy_document.lambda_deploy.json
+}
+
+data "aws_iam_policy_document" "ssm_read" {
+  statement {
+    sid    = "SSMParameterRead"
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath"
+    ]
+    resources = [
+      "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.project_name}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "ssm_read" {
+  name   = "ssm-parameter-read"
+  role   = aws_iam_role.github_actions_serverless.id
+  policy = data.aws_iam_policy_document.ssm_read.json
 }

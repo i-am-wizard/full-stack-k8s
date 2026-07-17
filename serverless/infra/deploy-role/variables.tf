@@ -1,7 +1,10 @@
-variable "github_repo" {
-  description = "GitHub repository (org/repo format)"
-  type        = string
-  default     = "i-am-wizard/full-stack-k8s"
+variable "github_repos" {
+  description = "GitHub repositories (org/repo format) whose Actions workflows may assume the deploy role"
+  type        = list(string)
+  default = [
+    "i-am-wizard/word-manager-fe",
+    "i-am-wizard/word-manager-rust-be",
+  ]
 }
 
 variable "github_branch" {
