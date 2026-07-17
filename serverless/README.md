@@ -24,16 +24,7 @@ Shared configuration:
 
 ## Prerequisites (one-time)
 
-- Terraform >= 1.5 and AWS credentials with permission to create IAM roles and S3 buckets (Steps 1–2 create the IAM roles and the state bucket).
-- A **globally unique** frontend bucket name that **starts with `word-manager-`** (S3 access is scoped to `word-manager-*`), e.g. `word-manager-frontend-<account-id>`.
-
----
-
-## Manual deployment (Terraform CLI)
-
-Run the three roots in order. Steps 1–2 use local state; Step 3 uses the S3 backend created in Step 1.
-
-### Step 1 — Provisioning role and Terraform state bucket
+Provision the OIDC provisioning role and the Terraform state bucket — the same step for both manual and GitHub Actions deploys:
 
 ```bash
 cd serverless/infra/infra-role
@@ -42,12 +33,16 @@ terraform plan
 terraform apply
 ```
 
-Creates the `github-actions-serverless-infra` role and the `word-manager-serverless-infra-ak` state bucket. Note the outputs:
+Outputs:
 
-- `role_arn` — set as the `AWS_SERVERLESS_INFRA_ROLE_ARN` secret in `full-stack-k8s` (for the GitHub Actions workflow).
-- `tfstate_bucket_name` — the state bucket used in Step 3.
+- `role_arn` — set as the `AWS_SERVERLESS_INFRA_ROLE_ARN` secret in `full-stack-k8s`.
+- `tfstate_bucket_name` — the `word-manager-serverless-infra-ak` state bucket used by `main/`.
 
-### Step 2 — Application deploy role
+---
+
+## Manual deployment (Terraform CLI)
+
+### Step 1 — Application deploy role
 
 ```bash
 cd serverless/infra/deploy-role
@@ -58,9 +53,10 @@ terraform apply
 
 Creates the `github-actions-serverless-deploy` role. Set its `role_arn` output as the `AWS_DEPLOY_ROLE_ARN` secret in `word-manager-fe` and `word-manager-rust-be`.
 
-### Step 3 — Deploy the stack
+### Step 2 — Deploy the stack
 
 ```bash
+# frontend bucket name: globally unique, must start with word-manager-
 export TF_VAR_frontend_bucket_name="word-manager-frontend-<account-id>"
 cd serverless/infra/main
 
@@ -110,9 +106,8 @@ Workflow: [`.github/workflows/serverless-deploy.yml`](../.github/workflows/serve
 
 ### Prerequisites
 
-1. Run **Step 1** (Manual deployment) once, then set the `role_arn` output as the repo secret **`AWS_SERVERLESS_INFRA_ROLE_ARN`**. This also creates the state bucket.
+1. Complete the [Prerequisites](#prerequisites-one-time) and set the `AWS_SERVERLESS_INFRA_ROLE_ARN` secret.
 2. Set the repo variable **`FRONTEND_BUCKET_NAME`** to a globally-unique `word-manager-*` bucket name.
-3. The GitHub **OIDC provider** (`token.actions.githubusercontent.com`) exists in the account — already present from the EKS/ECR OIDC roles.
 
 ### Run it
 
