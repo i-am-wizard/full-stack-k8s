@@ -118,6 +118,14 @@ Workflow: [`.github/workflows/serverless-deploy.yml`](../.github/workflows/serve
 
 > Manual runs must target the **`main`** branch — the role trust only allows `refs/heads/main`.
 
+### Tear down
+
+Workflow: [`.github/workflows/serverless-destroy.yml`](../.github/workflows/serverless-destroy.yml).
+
+**Actions → "Serverless Infrastructure: Destroy" → Run workflow**, then type `destroy` in the confirmation box to proceed. It runs `terraform destroy` against `serverless/infra/main` using the same role and backend.
+
+> This removes the stack (S3 + CloudFront, API Gateway + Lambda, DynamoDB, SSM parameters). It does **not** remove the provisioning role or the Terraform state bucket — those are managed by `infra-role` (the state bucket also has a `prevent_destroy` guard).
+
 ### After the infrastructure exists — application deploys
 
 Once `main/` is applied, the stack publishes its outputs to SSM Parameter Store under `/word-manager/*`, and the application repos deploy themselves on push to `main`:
