@@ -1,0 +1,158 @@
+# Word Manager — Serverless Deployment
+
+Deployment guide for the serverless AWS stack: **S3 + CloudFront** (frontend), **API Gateway HTTP API + Lambda** (Rust backend), and **DynamoDB**.
+
+- Architecture diagram: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- Design rationale and history: [`MIGRATION-PLAN.md`](./MIGRATION-PLAN.md)
+- Application code (Rust backend, React frontend) is deployed from its own repositories, not from here.
+
+There are two ways to deploy the infrastructure:
+
+- **[Manual (Terraform CLI)](#manual-deployment-terraform-cli)** — for the one-time bootstrap and local iteration.
+- **[GitHub Actions](#github-actions-deployment)** — a plan/apply workflow for repeatable deploys.
+
+Shared configuration:
+
+| Setting | Value |
+|---------|-------|
+| Region | `eu-west-2` |
+| Project name | `word-manager` |
+| Terraform state bucket | `word-manager-serverless-infra-ak` |
+| Terraform state key (`main/`) | `serverless/terraform.tfstate` |
+
+---
+
+## Prerequisites (one-time)
+
+### 1. Terraform state bucket
+
+The `main/` root uses an S3 remote backend. Create the bucket once (versioned + encrypted):
+
+```bash
+export TF_STATE_BUCKET="word-manager-serverless-infra-ak"
+
+aws s3api create-bucket \
+  --bucket $TF_STATE_BUCKET \
+  --region eu-west-2 \
+  --create-bucket-configuration LocationConstraint=eu-west-2
+
+aws s3api put-bucket-versioning \
+  --bucket $TF_STATE_BUCKET \
+  --versioning-configuration Status=Enabled
+
+aws s3api put-bucket-encryption \
+  --bucket $TF_STATE_BUCKET \
+  --server-side-encryption-configuration \
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+```
+
+### 2. Frontend bucket name
+
+`frontend_bucket_name` must be **globally unique** and **start with `word-manager-`** (the deploy and provisioning roles scope S3 access to `word-manager-*`). Provide it via `TF_VAR_frontend_bucket_name` (manual) or the `FRONTEND_BUCKET_NAME` repo variable (GitHub Actions):
+
+```bash
+export TF_VAR_frontend_bucket_name="word-manager-frontend-<account-id>"
+```
+
+---
+
+## Manual deployment (Terraform CLI)
+
+### Deploy the stack
+
+```bash
+cd serverless/infra/main
+
+terraform init \
+  -backend-config="bucket=$TF_STATE_BUCKET" \
+  -backend-config="key=serverless/terraform.tfstate" \
+  -backend-config="region=eu-west-2" \
+  -backend-config="encrypt=true" \
+  -backend-config="use_lockfile=true"
+
+terraform plan
+terraform apply
+```
+
+### Destroy the stack
+
+```bash
+cd serverless/infra/main
+terraform destroy
+
+# optional: also delete the state bucket
+aws s3 rb s3://$TF_STATE_BUCKET --force
+```
+
+### Bootstrap roles (run once, outside CI)
+
+Both are self-contained OIDC roles with **local state**, applied manually. They must be created outside GitHub Actions because they *are* the roles the pipelines assume (chicken-and-egg).
+
+**App deploy role** — assumed by the application repos to ship code (S3 sync, CloudFront invalidation, Lambda code update, SSM read):
+
+```bash
+cd serverless/infra/deploy-role
+terraform init && terraform plan && terraform apply
+# Set the role_arn output as the AWS_DEPLOY_ROLE_ARN secret in
+# word-manager-fe and word-manager-rust-be.
+```
+
+**Infra provisioning role** — assumed by the `serverless-deploy` GitHub Action to build the stack:
+
+```bash
+cd serverless/infra/infra-role
+terraform init && terraform plan && terraform apply
+# Set the role_arn output as the AWS_SERVERLESS_INFRA_ROLE_ARN secret in
+# full-stack-k8s.
+```
+
+### Layer-by-layer deployment (alternative, for independent testing)
+
+> A separate method using local state — each layer is its own Terraform root with its own state file. Do **not** use both `main/` and `layers/` against the same AWS account; they create the same resources and will conflict.
+
+```bash
+cd serverless/infra/layers/database
+terraform init && terraform plan && terraform apply
+
+cd ../iam
+terraform init && terraform plan && terraform apply
+
+cd ../backend
+terraform init && terraform plan && terraform apply
+
+cd ../frontend
+terraform init && terraform plan && terraform apply
+```
+
+Destroy order: `frontend, backend, iam, database`.
+
+---
+
+## GitHub Actions deployment
+
+Workflow: [`.github/workflows/serverless-deploy.yml`](../.github/workflows/serverless-deploy.yml). It runs `terraform plan`/`apply` against `serverless/infra/main` using S3-native state locking, assuming the dedicated provisioning role via OIDC.
+
+### Prerequisites
+
+1. **Provisioning role bootstrapped** (see [Bootstrap roles](#bootstrap-roles-run-once-outside-ci)) and its `role_arn` set as the repo secret **`AWS_SERVERLESS_INFRA_ROLE_ARN`**.
+2. Repo variable **`FRONTEND_BUCKET_NAME`** set to a globally-unique `word-manager-*` bucket name.
+3. **State bucket** `word-manager-serverless-infra-ak` exists (see [Prerequisites](#1-terraform-state-bucket)).
+4. The GitHub **OIDC provider** (`token.actions.githubusercontent.com`) exists in the account — already present from the EKS/ECR OIDC roles.
+
+### Run it
+
+**Actions → "Serverless Infrastructure: Plan & Deploy" → Run workflow**, then choose:
+
+- `plan` — shows the Terraform diff (no changes applied).
+- `apply` — provisions the stack and writes the outputs to the job summary.
+
+> Manual runs must target the **`main`** branch — the role trust only allows `refs/heads/main`.
+
+### After the infrastructure exists — application deploys
+
+Once `main/` is applied, the stack publishes its outputs to SSM Parameter Store under `/word-manager/*`, and the application repos deploy themselves on push to `main`:
+
+- **Backend** — `word-manager-rust-be/.github/workflows/deploy.yml` (builds the Rust Lambda, updates function code, shifts the `live` alias).
+- **Frontend** — `word-manager-fe/.github/workflows/deploy-frontend.yml` (builds the Vite app, syncs to S3, invalidates CloudFront).
+
+Both read their configuration from SSM and assume the app deploy role (`AWS_DEPLOY_ROLE_ARN`).
