@@ -58,90 +58,7 @@ Migrate the full-stack-k8s project from EKS (Java/Spring Boot + PostgreSQL + Ngi
 
 ## Deployment
 
-### Prerequisites - Create S3 bucket for Terraform state (one-time)
-```bash
-export TF_STATE_BUCKET="my-actual-bucket-name"
-export TF_VAR_frontend_bucket_name="my-globally-unique-name"
-
-aws s3api create-bucket \
-  --bucket $TF_STATE_BUCKET \
-  --region eu-west-2 \
-  --create-bucket-configuration LocationConstraint=eu-west-2
-
-aws s3api put-bucket-versioning \
-  --bucket $TF_STATE_BUCKET \
-  --versioning-configuration Status=Enabled
-
-aws s3api put-bucket-encryption \
-  --bucket $TF_STATE_BUCKET \
-  --server-side-encryption-configuration \
-    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-```
-
-### Deploy infrastructure
-```bash
-cd serverless/infra/main
-
-terraform init \
-  -backend-config="bucket=$TF_STATE_BUCKET" \
-  -backend-config="key=serverless/terraform.tfstate" \
-  -backend-config="region=eu-west-2"
-
-terraform plan
-terraform apply
-```
-
-### Destroy infrastructure
-```bash
-cd serverless/infra/main
-terraform destroy
-
-#optional: to delete TF state bucket
-aws s3 rb s3://$TF_STATE_BUCKET --force
-```
-
-### Deploy role (independent, run once)
-
-> The deploy role is separate from both main/ and layers/ deployments. It creates the GitHub Actions OIDC role that allows your application repositories to deploy code (S3 sync, CloudFront invalidation, Lambda code update). Deploy this before deploying applications from your FE/BE repos.
-
-```bash
-cd serverless/infra/deploy-role
-terraform init && terraform plan && terraform apply
-```
-
-### Destroy deploy role
-```bash
-cd serverless/infra/deploy-role
-terraform destroy
-```
-
-### Layer-by-layer deployment (alternative, for independent testing)
-
-> This is a separate deployment method using local state. Each layer is its own Terraform root with its own state file. Do not use both main/ and layers/ against the same AWS account - they create the same resources and will conflict.
-
-```bash
-cd serverless/infra/layers/database
-terraform init
-terraform plan
-terraform apply
-
-cd ../iam
-terraform init
-terraform plan
-terraform apply
-
-cd ../backend
-terraform init
-terraform plan
-terraform apply
-
-cd ../frontend
-terraform init
-terraform plan
-terraform apply
-```
-
-Destroy order: `frontend, backend, iam, database`
+Deployment instructions — manual (Terraform CLI) and GitHub Actions, with prerequisites — live in [`README.md`](./README.md).
 
 ## Folder Structure
 
@@ -149,16 +66,23 @@ Destroy order: `frontend, backend, iam, database`
 serverless/
 ├── ARCHITECTURE.md
 ├── MIGRATION-PLAN.md
+├── README.md                # Deployment guide (manual + GitHub Actions)
 └── infra/
     ├── main/                # Root module - deploys everything at once
     │   ├── main.tf
     │   ├── variables.tf
     │   ├── outputs.tf
+    │   ├── ssm.tf
     │   └── terraform.tf
-    ├── deploy-role/         # GitHub Actions OIDC role for app deploys
+    ├── deploy-role/         # GitHub Actions OIDC role for app code deploys
     │   ├── main.tf
     │   ├── variables.tf
     │   └── outputs.tf
+    ├── infra-role/          # GitHub Actions OIDC role for provisioning this stack
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   ├── outputs.tf
+    │   └── terraform.tf
     ├── layers/              # Per-layer roots for independent testing
     │   ├── database/
     │   ├── iam/
