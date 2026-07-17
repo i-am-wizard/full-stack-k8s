@@ -18,7 +18,7 @@ permissions:
 env:
   AWS_REGION: eu-west-2
   TF_VERSION: "1.13.5"
-  TF_STATE_BUCKET: word-manager-infra-ak
+  TF_STATE_BUCKET: word-manager-serverless-infra-ak
   TF_STATE_KEY: serverless/terraform.tfstate
   TF_VAR_frontend_bucket_name: ${{ vars.FRONTEND_BUCKET_NAME }}
 
@@ -37,7 +37,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_SERVERLESS_INFRA_ROLE_ARN }}
           role-session-name: github-actions-serverless-tf-plan
           aws-region: ${{ env.AWS_REGION }}
 
@@ -51,7 +51,9 @@ jobs:
           terraform init \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="region=${AWS_REGION}"
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
 
       - name: Terraform Plan
         id: plan
@@ -77,7 +79,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_SERVERLESS_INFRA_ROLE_ARN }}
           role-session-name: github-actions-serverless-tf-apply
           aws-region: ${{ env.AWS_REGION }}
 
@@ -92,7 +94,9 @@ jobs:
           terraform init \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="region=${AWS_REGION}"
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
