@@ -123,6 +123,7 @@ data "aws_iam_policy_document" "serverless_infra_permissions" {
     sid    = "GlobalReadAndLogDelivery"
     effect = "Allow"
     actions = [
+      "ssm:DescribeParameters",
       "logs:DescribeLogGroups",
       "logs:PutResourcePolicy",
       "logs:DescribeResourcePolicies",
